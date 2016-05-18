@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+export LC_ALL='C'
+
+logfile=`basename $0`.log
+
+if [ -z "$1" ] || [ -z "$2" ]
+then
+
+  echo "Shows a table of Git authors ranked according to who has the most
+deletions in Git history.
+
+Usage:
+    `basename $0` <path> <days ago>
+
+Examples:
+    `basename $0`  ~/my-repo 7
+    `basename $0`  . 28
+"
+  exit 1
+fi
+
+target_path=$1
+count=$2
+
+# cf. http://stackoverflow.com/questions/13055685
+additions_and_deletions_per_author () {
+    AUTHOR=$1
+
+    git log --since="-${count}days ago" --author="$AUTHOR" --shortstat \
+        | awk '/^ [0-9]/ { files_changed += $1; insertions += $4; deletions += $6 } \
+             END { printf("%24d\t%24d\t%24d", files_changed, insertions, deletions) }'
+}
+
+list_all_authors () {
+    git log --since="-${count}days ago" --format="%an" \
+        | sort -f | uniq
+}
+
+pushd $target_path > /dev/null
+
+printf "%24s\t%24s\t%24s\t%24s\n" "Author" "Files Touched" "Insertions" "Deletions" > $logfile
+
+IFS=$'\n'
+for name in $(list_all_authors)
+do
+    printf "%28s\t%s\n" "$name" "$(additions_and_deletions_per_author $name)" >> $logfile
+done
+unset IFS
+
+head -n1 $logfile \
+    && tail -n +2 $logfile \
+        | sort -t$'\t' -nrk4

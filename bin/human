@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+
+# Scan for interesting human language constructs.
+
+WORDS=(
+    asshat
+    asshole
+    batshit
+    bug
+    complex
+    complicat
+    confus
+    damn
+    debug
+    dirt
+    dumb
+    fuck
+    hack
+    insan
+    kludge
+    kluge
+    motherfuck
+    piss
+    screw
+    shit
+    spaghetti
+    stupid
+    wtf
+)
+
+if [ -z "$1" ]   # Exit if no argument given.
+then
+  echo "Usage: `basename $0` <path>"
+  exit 1
+fi
+
+SAVE_IFS=$IFS
+IFS="|"
+WORDS_REGEX="${WORDS[*]}"
+IFS=$SAVE_IFS
+
+REGEX="(\b|_)($WORDS_REGEX)"
+
+CWD=`pwd`
+
+test -e /tmp/scanners || mkdir -p /tmp/scanners
+test -e reports || mkdir reports
+
+egrep -IRin $REGEX $1 > /tmp/scanners/human_code.log
+
+pushd $1 > /dev/null && git log --format=oneline | egrep -Iin $REGEX > /tmp/scanners/human_git.log
+BRANCH=`git branch | grep \* | cut -d' ' -f2-`
+REV=`git log -n1 --format=%h`
+popd > /dev/null
+
+echo "
+$1 (branch $BRANCH at revision $REV)
+
+Interesting words found in the codebase:
+" | tee reports/human.log
+
+perl -lne "m{(\b|_)(($WORDS_REGEX)\w*)}i and print \$2" /tmp/scanners/human_code.log | sort | uniq -c | sort -rn | tee -a reports/human.log
+
+echo "
+Interesting words in the Git log:
+" | tee -a reports/human.log
+
+perl -lne "m{(\b|_)(($WORDS_REGEX)\w*)}i and print \$2" /tmp/scanners/human_git.log | sort | uniq -c | sort -rn | tee -a reports/human.log
